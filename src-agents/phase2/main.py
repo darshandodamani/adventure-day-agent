@@ -84,7 +84,7 @@ async def ask_question(ask: Ask):
     
 
     # Step 1: Create vectorized query based on the question
-    vector = VectorizedQuery(vector=get_embedding(start_phrase), k_nearest_neighbors=10, fields="vector")
+    vector = VectorizedQuery(vector=get_embedding(start_phrase), k_nearest_neighbors=5, fields="vector")
 
     # Step 2: Retrieve relevant documents from Azure Search (vector store)
     found_docs = list(search_client.search(
@@ -101,8 +101,6 @@ async def ask_question(ask: Ask):
     for doc in found_docs:
         found_docs_as_text += f" Movie Title: {doc['title']} | Release Year: {doc['year']} | Plot: {doc['plot']} | Movie Genre: {doc['genre']}. "
 
-    
-    # Step 4: Prepare the system prompt with the retrieved context
     system_prompt = """
     You are a friendly assistant which answers questions related to Smoorghs.
     Answer the query using only the sources provided below in a friendly and concise manner.
@@ -110,6 +108,15 @@ async def ask_question(ask: Ask):
     If there isn't enough information below, say you don't know.
     Do not generate answers that don't use the context below.
     """
+    if ask.type == QuestionType.multiple_choice:
+        system_prompt = system_prompt + "\n Answer directly one of the choices, nothing else."
+    elif ask.type == QuestionType.true_or_false:
+        system_prompt = system_prompt + "\n Answer true or false, nothing else."
+    elif ask.type == QuestionType.estimation:
+        system_prompt = system_prompt + "\n Answer just a number, nothing else."
+    
+    # Step 4: Prepare the system prompt with the retrieved context
+    
     parameters = [system_prompt, ' Context:', found_docs_as_text , ' Question:', start_phrase]
     joined_parameters = ''.join(parameters)
 
