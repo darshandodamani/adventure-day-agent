@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from enum import Enum
 from openai import AzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-
+import requests
 app = FastAPI()
 
 load_dotenv()
@@ -54,7 +54,6 @@ model_name = os.getenv("AZURE_OPENAI_COMPLETION_MODEL")
 async def root():
     return {"message": "Hello Smorgs"}
 
-import requests
 
 smoorghApi = "https://smoorgh-api.happypebble-f6fb3666.northeurope.azurecontainerapps.io/"
 
@@ -208,10 +207,17 @@ async def ask_question(ask: Ask):
     """
     Ask a question
     """
+    prompt_augmentation = ""
+    if ask.type == QuestionType.multiple_choice:
+        prompt_augmentation = " Answer directly one of the choices, nothing else."
+    elif ask.type == QuestionType.true_or_false:
+        prompt_augmentation = " Answer True or False, nothing else."
+    elif ask.type == QuestionType.estimation:
+        prompt_augmentation = " Answer if possible only one word, no bs."
     
     question = ask.question
     messages= [{"role" : "assistant", "content" : question}
-               , { "role" : "system", "content" : "Answer the question of the user and use the tools available to you. Give short concise answers, if possible only one word, no bs."}
+               , { "role" : "system", "content" : "Answer the question of the user and use the tools available to you. " + prompt_augmentation}
                ]
     first_response = client.chat.completions.create(
         model = deployment_name,
@@ -265,4 +271,5 @@ async def ask_question(ask: Ask):
             return second_response.choices[0].message.content
             
 
+   
    
