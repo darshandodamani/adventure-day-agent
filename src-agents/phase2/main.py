@@ -84,7 +84,7 @@ async def ask_question(ask: Ask):
     
 
     # Step 1: Create vectorized query based on the question
-    vector = VectorizedQuery(vector=get_embedding(start_phrase), k_nearest_neighbors=5, fields="vector")
+    vector = VectorizedQuery(vector=get_embedding(start_phrase), k_nearest_neighbors=10, fields="vector")
 
     # Step 2: Retrieve relevant documents from Azure Search (vector store)
     found_docs = list(search_client.search(
@@ -93,13 +93,13 @@ async def ask_question(ask: Ask):
         semantic_configuration_name="movies-semantic-config",
         vector_queries=[vector],
         select=["title", "genre", "plot", "year"],
-        top=5
+        top=10
     ))
 
     # Step 3: Convert the retrieved documents into a usable text format for context
     found_docs_as_text = " "
     for doc in found_docs:
-        found_docs_as_text += f" Movie Title: {doc['title']} | Release Year: {doc['year']} | Plot: {doc['plot']}. "
+        found_docs_as_text += f" Movie Title: {doc['title']} | Release Year: {doc['year']} | Plot: {doc['plot']} | Movie Genre: {doc['genre']}. "
 
     
     # Step 4: Prepare the system prompt with the retrieved context
@@ -112,6 +112,8 @@ async def ask_question(ask: Ask):
     """
     parameters = [system_prompt, ' Context:', found_docs_as_text , ' Question:', start_phrase]
     joined_parameters = ''.join(parameters)
+
+    #print(joined_parameters)
 
     # Step 5: Generate a completion using the language model with the context provided
     response = client.chat.completions.create(
