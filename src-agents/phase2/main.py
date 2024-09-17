@@ -74,21 +74,57 @@ async def root():
     return {"message": "Hello Smorgs"}
 
 @app.post("/ask", summary="Ask a question", operation_id="ask") 
-async def ask_question(ask: Ask):
+async def ask_question(ask: Ask): 
     """
-    Ask a question
+    Ask a question and retrieve an answer based on vector search and language model completion.
     """
 
-    start_phrase =  ask.question
-    response: openai.types.chat.chat_completion.ChatCompletion = None
+    start_phrase = ask.question
 
-    #####\n",
-    # implement rag flow here\n",
-    ######\n",
+    
 
-    answer = Answer(answer=response.choices[0].message.content)
-    answer.correlationToken = ask.correlationToken
-    answer.promptTokensUsed = response.usage.prompt_tokens
-    answer.completionTokensUsed = response.usage.completion_tokens
+    # Step 1: Create vectorized query based on the question
+    vector = VectorizedQuery(vector=get_embedding(start_phrase), k_nearest_neighbors=5, fields="vector")
+
+    # Step 2: Retrieve relevant documents from Azure Search (vector store)
+    found_docs = list(search_client.search(
+        search_text=None,
+        query_type="semantic",
+        semantic_configuration_name="movies-semantic-config",
+        vector_queries=[vector],
+        select=["title", "genre", "plot", "year"],
+        top=5
+    ))
+
+    # Step 3: Convert the retrieved documents into a usable text format for context
+    found_docs_as_text = " "
+    for doc in found_docs:
+        found_docs_as_text += f" Movie Title: {doc['title']} | Release Year: {doc['year']} | Plot: {doc['plot']}. "
+
+    
+    # Step 4: Prepare the system prompt with the retrieved context
+    system_prompt = """
+    You are a friendly assistant which answers questions related to Smoorghs.
+    Answer the query using only the sources provided below in a friendly and concise manner.
+    Answer ONLY with the facts listed in the list of context below.
+    If there isn't enough information below, say you don't know.
+    Do not generate answers that don't use the context below.
+    """
+    parameters = [system_prompt, ' Context:', found_docs_as_text , ' Question:', start_phrase]
+    joined_parameters = ''.join(parameters)
+
+    # Step 5: Generate a completion using the language model with the context provided
+    response = client.chat.completions.create(
+        model = deployment_name,
+        messages = [{"role": "assistant", "content": joined_parameters}],
+    )
+
+    # Step 6: Prepare the answer object to be returned
+    answer = Answer(
+        answer=response.choices[0].message.content,
+        correlationToken=ask.correlationToken,
+        promptTokensUsed=response.usage.prompt_tokens,
+        completionTokensUsed=response.usage.completion_tokens
+    )
 
     return answer

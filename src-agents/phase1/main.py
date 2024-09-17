@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from enum import Enum
 from openai import AzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+import re
+from word2number import w2n
 
 app = FastAPI()
 
@@ -49,20 +51,51 @@ deployment_name = os.getenv("AZURE_OPENAI_COMPLETION_DEPLOYMENT_NAME")
 async def root():
     return {"message": "Hello Smoorghs"}
 
+
+
+
+
+def extract_number(sentence: str) -> str:
+
+    # Extract the word representing the number
+    number_word = re.search(r'\b(one|two|three|four|five|six|seven|eight|nine|ten)\b', sentence, re.IGNORECASE)
+
+    if number_word:
+        # Convert the word to an integer
+        number_int = w2n.word_to_num(number_word.group())
+        return str(number_int)
+    else:
+        print("No number word found in the sentence.")
+    
+
 @app.post("/ask", summary="Ask a question", operation_id="ask") 
 async def ask_question(ask: Ask):
-    """
-    Ask a question
-    """
+    # """
+    # # Ask a question
+    # """
 
     # Send a completion call to generate an answer
     print('Sending a request to openai')
+    
     start_phrase =  ask.question
     response: openai.types.chat.chat_completion.ChatCompletion = None
+    
+    response = client.chat.completions.create(
+        model = deployment_name,
+        messages = [{"role" : "assistant", "content" : start_phrase}, 
+                     { "role" : "system", "content" : "Answer this question:"}]
+    )
 
-    # Send a completion call to generate an answer
-
-    answer = Answer(answer=response.choices[0].message.content)
+    print(response.choices[0].message.content)
+    print(response)
+    answer_string = response.choices[0].message.content
+    if ask.type == QuestionType.multiple_choice:
+        answer_string = answer_string[3:]
+    elif ask.type == QuestionType.true_or_false:
+        answer_string = answer_string.lower()
+    elif ask.type == QuestionType.estimation:
+        answer_string = extract_number(answer_string)
+    answer = Answer(answer=answer_string)
     answer.correlationToken = ask.correlationToken
     answer.promptTokensUsed = response.usage.prompt_tokens
     answer.completionTokensUsed = response.usage.completion_tokens

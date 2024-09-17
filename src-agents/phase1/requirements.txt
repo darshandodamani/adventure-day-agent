@@ -6,3 +6,4 @@ azure-search-documents==11.5.1
 azure-identity==1.17.1
 uvicorn==0.30.6
 fastapi==0.112.2
+word2number==1.1
